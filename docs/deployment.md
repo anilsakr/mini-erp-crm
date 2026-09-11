@@ -34,9 +34,11 @@ DATABASE_URL="<neon connection string>" npx tsx prisma/seed.ts
 2. In Render, create a **New Web Service**, connect the repo.
 3. Settings:
    - **Root Directory**: `apps/backend`
-   - **Build Command**: `npm install && npm run build`
+   - **Build Command**: `npm install --include=dev && npm run build`
    - **Start Command**: `npm start`
    - **Environment**: Node
+
+   The `--include=dev` flag matters: Render (like most PaaS build environments) sets `NODE_ENV=production` before running `npm install`, and npm's default behavior is to skip `devDependencies` entirely when `NODE_ENV=production` — including `typescript` itself. Without this flag the build fails with "tsc: command not found" or missing type-declaration errors. The production `build` script (`tsc -p tsconfig.build.json`) only compiles `src/`, so once the compiler is present the build itself never needs test-only packages like `vitest`/`supertest`.
 4. Environment variables (Render dashboard → Environment):
 
    | Key | Value |
