@@ -222,7 +222,12 @@ Full reference: **`docs/api.md`**. Runnable collection: **`postman/MiniERPCRM.po
 
 ## 19. Deployment
 
-Not yet deployed as of this writing — **`docs/deployment.md`** is the full runbook (Neon for Postgres, Render for the backend, Vercel for the frontend, all free tiers) plus an optional AWS architecture discussion. Once deployed, this section and the Demo Credentials section below will be updated with the live URLs.
+Live now — deployed exactly per the runbook in **`docs/deployment.md`** (Neon for Postgres, Render for the backend, Vercel for the frontend, all free tiers):
+
+- **Frontend**: https://mini-erp-crm-frontend-fawn.vercel.app
+- **Backend**: https://mini-erp-crm-44i0.onrender.com (health check: `/health`)
+
+Note: Render's free tier spins the backend down after inactivity, so the first request after a while can take 30–60 seconds to wake it back up — normal, not a bug.
 
 ## 20. Demo Credentials
 

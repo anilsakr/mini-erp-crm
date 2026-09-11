@@ -1,12 +1,12 @@
 # Deployment Guide
 
-**Status: not yet deployed as of this writing.** This is the runbook for doing so — Neon (Postgres) → Render (backend) → Vercel (frontend), all free tiers, no AWS spend, per the case study's constraints. Once live, the root `README.md` "Demo Credentials" / "Deployment" sections and this file's "Live URLs" placeholder should be updated with the real values.
+**Status: live.** Deployed exactly per this runbook — Neon (Postgres) → Render (backend) → Vercel (frontend), all free tiers, no AWS spend, per the case study's constraints.
 
 ## Live URLs
 
-- Frontend: `<TBD — fill in after Vercel deploy>`
-- Backend: `<TBD — fill in after Render deploy>`
-- Health check: `<backend URL>/health`
+- Frontend: https://mini-erp-crm-frontend-fawn.vercel.app
+- Backend: https://mini-erp-crm-44i0.onrender.com
+- Health check: https://mini-erp-crm-44i0.onrender.com/health
 
 ## 1. Create the Database (Neon)
 
@@ -88,6 +88,15 @@ git push -u origin main
 ```
 
 (Use `--private` instead of `--public` if you'd rather not make the source public before/during the interview.)
+
+## Gotchas Hit During This Deployment (and the fixes)
+
+Worth knowing for an interview — none of these showed up in local dev, only on the actual platforms:
+
+1. **`npm start` pointed at the wrong compiled path.** `tsconfig.json`'s `rootDir` is `.` (it also type-checks `prisma/` and `tests/`), so `tsc` preserves the `src/` folder under `dist/` — the real entrypoint is `dist/src/server.js`, not `dist/server.js`. Fixed in `package.json`.
+2. **Render's build silently skipped all devDependencies**, including `typescript` itself. Platforms that set `NODE_ENV=production` before `npm install` get npm's default behavior of skipping `devDependencies` — reproduced locally with `NODE_ENV=production npm install` to confirm before fixing. Fixed with `npm install --include=dev` in the build command, plus a `tsconfig.build.json` that only compiles `src/` so the deployable artifact never actually needs `vitest`/`supertest`/`@types/*` at runtime.
+3. **A TypeScript version resolved on Render rejected the deprecated `moduleResolution: "node"` alias** (`TS5108`) even though the identical semver range built fine locally. Switched to the non-deprecated `"node16"` for both `module` and `moduleResolution`.
+4. **Vercel 404'd on any direct URL other than `/`** (e.g. `/login`, `/customers/3`). Static hosts don't know about React Router's client-side routes — only the files that exist in the build. Fixed with a `vercel.json` rewrite sending every path to `index.html`.
 
 ## Optional: AWS Architecture (Documented, Not Deployed)
 
