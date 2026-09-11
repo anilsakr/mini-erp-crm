@@ -12,3 +12,4 @@ coverage/
 .idea/
 apps/backend/generated/
 apps/frontend/.vite/
+*.tsbuildinfo
