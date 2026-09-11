@@ -1,0 +1,92 @@
+# Deployment Guide
+
+**Status: not yet deployed as of this writing.** This is the runbook for doing so — Neon (Postgres) → Render (backend) → Vercel (frontend), all free tiers, no AWS spend, per the case study's constraints. Once live, the root `README.md` "Demo Credentials" / "Deployment" sections and this file's "Live URLs" placeholder should be updated with the real values.
+
+## Live URLs
+
+- Frontend: `<TBD — fill in after Vercel deploy>`
+- Backend: `<TBD — fill in after Render deploy>`
+- Health check: `<backend URL>/health`
+
+## 1. Create the Database (Neon)
+
+1. Create a free account at neon.tech and a new project.
+2. Copy the connection string it gives you (it looks like `postgresql://<user>:<password>@<host>/<db>?sslmode=require`).
+3. Keep it handy — this becomes `DATABASE_URL` on the backend.
+
+Neon's free tier is used for both the "production" database here; a separate Neon branch/project can be used for local development too if you'd rather not install Postgres locally (see README section 14 for the local-Postgres alternative).
+
+## 2. Run Migrations and Seed Against It
+
+From `apps/backend`, with `DATABASE_URL` pointed at the Neon connection string (either export it in your shell or temporarily put it in `apps/backend/.env`):
+
+```bash
+cd apps/backend
+DATABASE_URL="<neon connection string>" npx prisma migrate deploy
+DATABASE_URL="<neon connection string>" npx tsx prisma/seed.ts
+```
+
+`migrate deploy` (not `migrate dev`) is used here — it applies existing migrations without trying to generate new ones, which is the correct command for any non-local environment.
+
+## 3. Deploy the Backend (Render)
+
+1. Push this repository to GitHub (see below) — Render deploys from a GitHub repo.
+2. In Render, create a **New Web Service**, connect the repo.
+3. Settings:
+   - **Root Directory**: `apps/backend`
+   - **Build Command**: `npm install && npm run build`
+   - **Start Command**: `npm start`
+   - **Environment**: Node
+4. Environment variables (Render dashboard → Environment):
+
+   | Key | Value |
+   |---|---|
+   | `DATABASE_URL` | the Neon connection string |
+   | `JWT_SECRET` | a long random string (e.g. `openssl rand -hex 32`) — different from any local dev value |
+   | `JWT_EXPIRES_IN` | `8h` |
+   | `PORT` | Render sets this automatically; the app already reads `process.env.PORT` |
+   | `FRONTEND_URL` | the Vercel URL from step 4 below (update this after the frontend is deployed) |
+   | `NODE_ENV` | `production` |
+
+5. Deploy. Render will run the build/start commands above. Because `apps/backend`'s `postinstall` script runs `prisma generate`, the Prisma client is regenerated automatically on every deploy — migrations still need to be applied manually via `prisma migrate deploy` (step 2), or wired into the build command (`npm run build && npx prisma migrate deploy`) if you want migrations to run on every deploy.
+
+## 4. Deploy the Frontend (Vercel)
+
+Because this is an npm-workspaces monorepo, Vercel needs to be told which workspace to build:
+
+1. Import the GitHub repo into Vercel.
+2. **Root Directory**: `apps/frontend`.
+3. **Build Command**: `npm install --prefix ../.. && npm run build --workspace=apps/frontend` (installs from the monorepo root so workspace linking works, then builds just the frontend) — or simply set the root directory to `apps/frontend` and let Vercel's default `npm install && npm run build` run there directly, since `apps/frontend/package.json` has its own `build` script (`tsc -b && vite build`) with all its own dependencies declared; either approach works, the important part is `Root Directory` is `apps/frontend`.
+4. **Output Directory**: `dist` (Vite's default, relative to the root directory).
+5. Environment variable: `VITE_API_BASE_URL` = the Render backend URL + `/api`, e.g. `https://mini-erp-crm-backend.onrender.com/api`.
+6. Deploy.
+
+## 5. Configure CORS
+
+Go back to Render and set the backend's `FRONTEND_URL` environment variable to the exact Vercel URL (e.g. `https://mini-erp-crm.vercel.app`, no trailing slash), then redeploy the backend. The Express app's CORS middleware (`app.ts`) only allows requests from this exact origin — a mismatch here is the most common cause of "network error" on the deployed frontend even though the backend is healthy.
+
+## 6. Verify
+
+```bash
+curl https://<render-backend-url>/health
+# expect: {"status":"ok","timestamp":"...","database":"connected"}
+```
+
+Then open the Vercel URL and log in with one of the seeded demo accounts (README section 20).
+
+## Notes on Render's Free Tier
+
+Render's free web services spin down after a period of inactivity and take ~30–60 seconds to cold-start on the next request. Worth mentioning proactively during a live recruiter demo ("first request might be slow, that's Render's free tier, not the app").
+
+## GitHub Repository
+
+```bash
+gh repo create mini-erp-crm --public --source=. --remote=origin
+git push -u origin main
+```
+
+(Use `--private` instead of `--public` if you'd rather not make the source public before/during the interview.)
+
+## Optional: AWS Architecture (Documented, Not Deployed)
+
+The case study treats AWS as an optional bonus, not a requirement, and explicitly says not to spend money on this assignment. The full AWS architecture — Route 53 → CloudFront → S3 (frontend) + ALB → ECS/Fargate (backend) → RDS PostgreSQL, with Secrets Manager and CloudWatch — is documented in `docs/system-design.md` under "Deployment Architecture" as a discussion of how this system would be deployed at real production scale. It has intentionally **not** been implemented here.
